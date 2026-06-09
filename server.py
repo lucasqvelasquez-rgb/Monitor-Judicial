@@ -46,65 +46,50 @@ db = leer_db()
 notifs_pendientes = []
 
 # ── Consulta API Rama Judicial ─────────────────────────────────────────────────
-HEADERS_LIST = [
-    {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "es-CO,es;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "Referer": "https://consultaprocesos.ramajudicial.gov.co/Procesos/NumeroRadicacion",
-        "Origin": "https://consultaprocesos.ramajudicial.gov.co",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
-    },
-    {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-        "Accept": "application/json, */*",
-        "Accept-Language": "es-419,es;q=0.9",
-        "Referer": "https://consultaprocesos.ramajudicial.gov.co/Procesos/NumeroRadicacion",
-        "Origin": "https://consultaprocesos.ramajudicial.gov.co",
-    },
-]
+HDR_CPNU = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "es-CO,es;q=0.9",
+    "Referer": "https://consultaprocesos.ramajudicial.gov.co/Procesos/NumeroRadicacion",
+    "Origin": "https://consultaprocesos.ramajudicial.gov.co",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+}
 
-def get_json(url, intentos=3):
-    """Intenta obtener JSON con reintentos y rotación de headers."""
-    ultimo_error = None
-    for i in range(intentos):
-        try:
-            headers = HEADERS_LIST[i % len(HEADERS_LIST)]
-            time.sleep(i * 1.5)  # espera progresiva entre reintentos
-            r = requests.get(url, headers=headers, timeout=25)
-            if r.status_code == 200 and r.text.strip():
-                return r.json()
-            elif r.status_code == 429:
-                time.sleep(5)
-                continue
-            else:
-                ultimo_error = f"HTTP {r.status_code}: {r.text[:200]}"
-        except Exception as e:
-            ultimo_error = str(e)
-    raise ValueError(f"No se pudo consultar después de {intentos} intentos: {ultimo_error}")
+HDR_PUBPROC = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "es-CO,es;q=0.9",
+    "Referer": "https://publicacionesprocesales.ramajudicial.gov.co/",
+    "Origin": "https://publicacionesprocesales.ramajudicial.gov.co",
+}
 
-def consultar_rama_judicial(radicado: str) -> dict:
+def intentar_cpnu(radicado: str) -> dict:
+    """Intenta consultar la API del CPNU directamente."""
     base = "https://consultaprocesos.ramajudicial.gov.co/api/v2"
-
-    # Paso 1: buscar proceso por radicado
-    url = f"{base}/Procesos/NumeroRadicacion/{radicado}/pagina/1"
-    data = get_json(url)
-
+    s = requests.Session()
+    # primero visitar la página para obtener cookies
+    s.get("https://consultaprocesos.ramajudicial.gov.co/Procesos/NumeroRadicacion",
+          headers=HDR_CPNU, timeout=15)
+    time.sleep(1)
+    r = s.get(f"{base}/Procesos/NumeroRadicacion/{radicado}/pagina/1",
+              headers=HDR_CPNU, timeout=20)
+    if not r.ok or not r.text.strip():
+        raise ValueError(f"CPNU HTTP {r.status_code}")
+    data = r.json()
     procesos = data.get("procesos", [])
     if not procesos:
-        raise ValueError(f"Radicado {radicado} no encontrado en CPNU")
-
+        raise ValueError("No encontrado en CPNU")
     proc = procesos[0]
     id_proceso = proc.get("idProceso")
-
-    # Paso 2: obtener actuaciones
-    url_acts = f"{base}/Proceso/{id_proceso}/actuaciones/pagina/1"
-    data_acts = get_json(url_acts)
-
+    time.sleep(0.5)
+    r2 = s.get(f"{base}/Proceso/{id_proceso}/actuaciones/pagina/1",
+               headers=HDR_CPNU, timeout=20)
+    r2.raise_for_status()
+    data_acts = r2.json()
     actuaciones = []
     for a in data_acts.get("actuaciones", []):
         actuaciones.append({
@@ -115,8 +100,8 @@ def consultar_rama_judicial(radicado: str) -> dict:
             "anotacion":   a.get("codRegla") or None,
             "conDoc":      bool(a.get("conDocumentos", False)),
         })
-
     return {
+        "fuente_consulta": "cpnu",
         "idProceso":       id_proceso,
         "demandante":      proc.get("sujetosProcesales", ""),
         "demandado":       proc.get("despacho", ""),
@@ -128,6 +113,96 @@ def consultar_rama_judicial(radicado: str) -> dict:
         "ponente":         proc.get("ponente", ""),
         "fechaRadicacion": proc.get("fechaProceso", ""),
         "ultimaActuacion": proc.get("fechaUltimaActuacion", ""),
+        "actuaciones":     actuaciones,
+    }
+
+def intentar_pubproc(radicado: str) -> dict:
+    """Consulta Publicaciones Procesales como alternativa al CPNU."""
+    from bs4 import BeautifulSoup
+    # El despacho se extrae de los dígitos 9-11 del radicado
+    cod_despacho = radicado[:12]  # primeros 12 dígitos = código despacho
+    url = (f"https://publicacionesprocesales.ramajudicial.gov.co/api/jsonws"
+           f"/publicacion.publicacion/find-publicaciones-by-radicado"
+           f"/radicado/{radicado}")
+    r = requests.get(url, headers=HDR_PUBPROC, timeout=20)
+    actuaciones = []
+    if r.ok and r.text.strip() and r.text.strip() != "[]":
+        try:
+            items = r.json() if isinstance(r.json(), list) else []
+            for item in items[:20]:
+                actuaciones.append({
+                    "id":          str(item.get("publicacionId", f"p_{time.time()}")),
+                    "fecha":       item.get("fechaPublicacion", ""),
+                    "tipo":        item.get("tipoPublicacion", "Publicación procesal"),
+                    "descripcion": item.get("descripcion", "") or item.get("asunto", ""),
+                    "anotacion":   None,
+                    "conDoc":      bool(item.get("tieneDocumento", False)),
+                })
+        except Exception:
+            pass
+    # Si no hay actuaciones por API, intentar scraping de la página
+    if not actuaciones:
+        url2 = (f"https://publicacionesprocesales.ramajudicial.gov.co/web/publicaciones-procesales"
+                f"/inicio?radicado={radicado}")
+        r2 = requests.get(url2, headers=HDR_PUBPROC, timeout=20)
+        if r2.ok:
+            soup = BeautifulSoup(r2.text, "html.parser")
+            for row in soup.select("table tr")[1:6]:
+                cols = row.find_all("td")
+                if len(cols) >= 3:
+                    actuaciones.append({
+                        "id":          f"pub_{time.time()}_{len(actuaciones)}",
+                        "fecha":       cols[0].get_text(strip=True),
+                        "tipo":        cols[1].get_text(strip=True),
+                        "descripcion": cols[2].get_text(strip=True),
+                        "anotacion":   None, "conDoc": False,
+                    })
+    return {
+        "fuente_consulta": "pubproc",
+        "demandante":      "",
+        "demandado":       "",
+        "despacho":        f"Despacho {radicado[9:12]} — {radicado[:5]}",
+        "tipo":            "Proceso judicial",
+        "clase":           "",
+        "subclase":        "",
+        "estado":          "En trámite",
+        "ponente":         "",
+        "fechaRadicacion": radicado[12:16] + "-01-01",
+        "ultimaActuacion": actuaciones[0]["fecha"] if actuaciones else "",
+        "actuaciones":     actuaciones,
+    }
+
+def consultar_rama_judicial(radicado: str) -> dict:
+    """Consulta CPNU primero; si falla, usa Publicaciones Procesales."""
+    # Intentar CPNU
+    try:
+        resultado = intentar_cpnu(radicado)
+        log.info(f"  ✓ CPNU ok: {radicado}")
+        return resultado
+    except Exception as e:
+        log.warning(f"  CPNU falló ({e}), intentando Publicaciones Procesales…")
+    # Fallback: Publicaciones Procesales
+    try:
+        resultado = intentar_pubproc(radicado)
+        log.info(f"  ✓ PubProc ok: {radicado} ({len(resultado['actuaciones'])} acts)")
+        return resultado
+    except Exception as e2:
+        raise ValueError(f"Ambas fuentes fallaron. CPNU: bloqueado. PubProc: {e2}")
+
+def _dummy_return(radicado):
+    # Este bloque ya no se usa, lo dejamos solo para compatibilidad
+    return {
+        "idProceso":       None,
+        "demandante":      "",
+        "demandado":       "",
+        "despacho":        "",
+        "tipo":            "",
+        "clase":           "",
+        "subclase":        "",
+        "estado":          "En trámite",
+        "ponente":         "",
+        "fechaRadicacion": "",
+        "ultimaActuacion": "",
         "actuaciones":     actuaciones,
     }
 
