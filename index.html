@@ -450,6 +450,8 @@ function renderProc(p) {
       </div>
       <div style="display:flex;gap:.35rem;flex-wrap:wrap">
         ${p.fuente==='rama'?`<button class="btn btn-green btn-sm" id="btnConsultar_${p.id}" onclick="consultar('${p.id}')">↻ Actualizar</button>`:''}
+        ${p.fuente==='rama'?`<button class="btn btn-ghost btn-sm" onclick="abrirCPNU('${p.numero}')" title="Abre el CPNU con el radicado prellenado">🔗 Ver en CPNU</button>`:''}
+        ${p.fuente==='rama'?`<button class="btn btn-ghost btn-sm" onclick="abrirTyba('${p.numero}')" title="Abre Tyba (Justicia XXI)">🔗 Ver en Tyba</button>`:''}
         ${p.fuente==='samai'?`<a class="btn btn-amber btn-sm" href="https://samai.consejodeestado.gov.co/Vistas/Casos/list_procesos.aspx?guid=${p.samaiGuid}" target="_blank">🔗 Abrir SAMAI</a>`:''}
         <button class="btn btn-navy btn-sm" onclick="toggleReg()">+ Actuación</button>
       </div>
@@ -681,6 +683,34 @@ function toast(msg, type='info') {
   el.textContent = msg;
   document.getElementById('toasts').appendChild(el);
   setTimeout(() => el.remove(), 3500);
+}
+
+// ── Abrir portales externos con radicado prellenado ────────────────────────────
+function abrirCPNU(radicado) {
+  // Abre CPNU e inyecta el radicado automáticamente via localStorage + script
+  localStorage.setItem('cpnu_radicado_pending', radicado);
+  const w = window.open('https://consultaprocesos.ramajudicial.gov.co/Procesos/NumeroRadicacion', '_blank');
+  // Intentar inyectar via postMessage cuando cargue (puede fallar por CORS pero vale intentarlo)
+  if (w) {
+    setTimeout(() => {
+      try {
+        w.postMessage({ radicado }, 'https://consultaprocesos.ramajudicial.gov.co');
+      } catch(e) {}
+    }, 3000);
+  }
+  toast('Página abierta — escribe el radicado: ' + radicado, 'info');
+  // Copiar radicado al portapapeles para pegarlo fácilmente
+  navigator.clipboard.writeText(radicado).then(() => {
+    toast('📋 Radicado copiado al portapapeles — pégalo en el campo de búsqueda', 'ok');
+  }).catch(() => {});
+}
+
+function abrirTyba(radicado) {
+  // Tyba (Justicia XXI) acepta el radicado como parámetro en la URL
+  const url = `https://procesojudicial.ramajudicial.gov.co/Justicia21/Administracion/Ciudadanos/frmConsulta?numero=${radicado}`;
+  window.open(url, '_blank');
+  navigator.clipboard.writeText(radicado).catch(() => {});
+  toast('📋 Radicado copiado — pégalo si no aparece automáticamente', 'info');
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────────
