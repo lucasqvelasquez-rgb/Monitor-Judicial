@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=False)
 
 # ── Variables de entorno (se configuran en Railway) ────────────────────────────
 EMAIL_DESTINO       = os.environ.get("EMAIL_DESTINO", "")
