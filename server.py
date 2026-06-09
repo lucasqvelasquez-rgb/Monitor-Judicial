@@ -72,16 +72,20 @@ SCRAPINGBEE_KEY = os.environ.get("SCRAPINGBEE_KEY", "")
 def get_cpnu(url: str) -> requests.Response:
     """Hace una petición al CPNU usando ScrapingBee si está disponible, o directo si no."""
     if SCRAPINGBEE_KEY:
-        # ScrapingBee renderiza JavaScript y pasa el anti-bot
         proxy_url = (
             f"https://app.scrapingbee.com/api/v1/"
             f"?api_key={SCRAPINGBEE_KEY}"
             f"&url={requests.utils.quote(url, safe='')}"
             f"&render_js=false"
-            f"&premium_proxy=false"
-            f"&custom_google=false"
+            f"&forward_headers=true"
         )
-        r = requests.get(proxy_url, timeout=30)
+        headers = {
+            "Spb-Accept": "application/json, text/plain, */*",
+            "Spb-Accept-Language": "es-CO,es;q=0.9",
+            "Spb-Referer": "https://consultaprocesos.ramajudicial.gov.co/Procesos/NumeroRadicacion",
+            "Spb-Origin": "https://consultaprocesos.ramajudicial.gov.co",
+        }
+        r = requests.get(proxy_url, headers=headers, timeout=60)
         return r
     else:
         return requests.get(url, headers=HDR_CPNU, timeout=20)
