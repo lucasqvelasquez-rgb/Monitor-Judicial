@@ -67,28 +67,43 @@ HDR_PUBPROC = {
     "Origin": "https://publicacionesprocesales.ramajudicial.gov.co",
 }
 
+SCRAPINGBEE_KEY = os.environ.get("SCRAPINGBEE_KEY", "")
+
+def get_cpnu(url: str) -> requests.Response:
+    """Hace una petición al CPNU usando ScrapingBee si está disponible, o directo si no."""
+    if SCRAPINGBEE_KEY:
+        # ScrapingBee renderiza JavaScript y pasa el anti-bot
+        proxy_url = (
+            f"https://app.scrapingbee.com/api/v1/"
+            f"?api_key={SCRAPINGBEE_KEY}"
+            f"&url={requests.utils.quote(url, safe='')}"
+            f"&render_js=false"
+            f"&premium_proxy=false"
+            f"&custom_google=false"
+        )
+        r = requests.get(proxy_url, timeout=30)
+        return r
+    else:
+        return requests.get(url, headers=HDR_CPNU, timeout=20)
+
 def intentar_cpnu(radicado: str) -> dict:
-    """Intenta consultar la API del CPNU directamente."""
+    """Consulta el CPNU via ScrapingBee (si hay key) o directo."""
     base = "https://consultaprocesos.ramajudicial.gov.co/api/v2"
-    s = requests.Session()
-    # primero visitar la página para obtener cookies
-    s.get("https://consultaprocesos.ramajudicial.gov.co/Procesos/NumeroRadicacion",
-          headers=HDR_CPNU, timeout=15)
-    time.sleep(1)
-    r = s.get(f"{base}/Procesos/NumeroRadicacion/{radicado}/pagina/1",
-              headers=HDR_CPNU, timeout=20)
+
+    r = get_cpnu(f"{base}/Procesos/NumeroRadicacion/{radicado}/pagina/1")
     if not r.ok or not r.text.strip():
-        raise ValueError(f"CPNU HTTP {r.status_code}")
+        raise ValueError(f"CPNU HTTP {r.status_code}: {r.text[:100]}")
     data = r.json()
     procesos = data.get("procesos", [])
     if not procesos:
         raise ValueError("No encontrado en CPNU")
     proc = procesos[0]
     id_proceso = proc.get("idProceso")
+
     time.sleep(0.5)
-    r2 = s.get(f"{base}/Proceso/{id_proceso}/actuaciones/pagina/1",
-               headers=HDR_CPNU, timeout=20)
-    r2.raise_for_status()
+    r2 = get_cpnu(f"{base}/Proceso/{id_proceso}/actuaciones/pagina/1")
+    if not r2.ok:
+        raise ValueError(f"Actuaciones HTTP {r2.status_code}")
     data_acts = r2.json()
     actuaciones = []
     for a in data_acts.get("actuaciones", []):
