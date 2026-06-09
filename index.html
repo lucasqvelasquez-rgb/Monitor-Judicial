@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Monitor Judicial</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚖️</text></svg>"/>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap');
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --navy:#1B2F4E;--navy2:#243d63;--green:#2D6A4F;--green2:#52b788;
+      --amber:#D97706;--red:#B91C1C;--bg:#EEF0F5;--surface:#fff;
+      --border:#D4D8E4;--text:#1a1f2e;--muted:#64748b;
+      --serif:'IBM Plex Serif',Georgia,serif;
+      --sans:'IBM Plex Sans',system-ui,sans-serif;
+    }
+    body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+    .hdr{background:var(--navy);height:54px;display:flex;align-items:center;
+      justify-content:space-between;padding:0 1.25rem;position:sticky;top:0;z-index:100;
+      box-shadow:0 2px 10px rgba(0,0,0,.3)}
+    .hdr-brand{display:flex;align-items:center;gap:.6rem}
+    .hdr-logo{width:28px;height:28px;background:var(--green2);border-radius:6px;
+      display:flex;align-items:center;justify-content:center;font-size:.9rem}
+    .hdr-title{font-family:var(--serif);font-size:1rem;color:#fff;font-weight:600}
+    .hdr-title span{color:var(--green2)}
+    .hdr-right{display:flex;gap:.4rem;align-items:center}
+    .srv-dot{width:8px;height:8px;border-radius:50%}
+    .srv-dot.ok{background:var(--green2)}.srv-dot.err{background:var(--red)}.srv-dot.pend{background:var(--amber)}
+    .srv-txt{font-size:.7rem;color:rgba(255,255,255,.6)}
+    .layout{display:flex;height:calc(100vh - 54px)}
+    .side{width:290px;min-width:250px;background:var(--surface);
+      border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+    .main{flex:1;overflow-y:auto;padding:1.25rem}
+    .tabs{display:flex;border-bottom:2px solid var(--border);flex-shrink:0}
+    .tab{flex:1;padding:.5rem .3rem;font-size:.68rem;font-weight:700;border:none;
+      background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;
+      margin-bottom:-2px;transition:all .15s;text-transform:uppercase;letter-spacing:.04em}
+    .tab.on{color:var(--navy);border-bottom-color:var(--navy)}
+    .form{padding:.75rem;display:flex;flex-direction:column;gap:.55rem}
+    .lbl{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+      color:var(--muted);display:block;margin-bottom:.12rem}
+    .inp{width:100%;padding:.42rem .6rem;border:1.5px solid var(--border);border-radius:6px;
+      font-size:.8rem;font-family:var(--sans);color:var(--text);background:var(--bg);transition:border-color .15s}
+    .inp:focus{outline:none;border-color:var(--navy);background:#fff}
+    .hint{font-size:.65rem;color:var(--muted);margin-top:.12rem}
+    .btn{padding:.42rem .85rem;border:none;border-radius:6px;font-size:.76rem;font-weight:600;
+      cursor:pointer;font-family:var(--sans);display:inline-flex;align-items:center;
+      gap:.32rem;transition:all .15s;white-space:nowrap;text-decoration:none}
+    .btn-navy{background:var(--navy);color:#fff}.btn-navy:hover{background:var(--navy2)}
+    .btn-navy:disabled{background:#94a3b8;cursor:not-allowed}
+    .btn-green{background:var(--green);color:#fff}.btn-green:hover{background:#3a856a}
+    .btn-amber{background:var(--amber);color:#fff}
+    .btn-ghost{background:transparent;border:1.5px solid var(--border);color:var(--text)}
+    .btn-ghost:hover{border-color:var(--navy);color:var(--navy)}
+    .btn-sm{padding:.28rem .6rem;font-size:.72rem}
+    .btn-xs{padding:.18rem .4rem;font-size:.67rem;border-radius:4px}
+    .btn-del{padding:.22rem;background:transparent;border:1.5px solid var(--border);
+      border-radius:4px;cursor:pointer;color:var(--muted);display:inline-flex;transition:all .15s}
+    .btn-del:hover{border-color:var(--red);color:var(--red)}
+    .list-hdr{padding:.45rem .8rem;font-size:.6rem;font-weight:700;text-transform:uppercase;
+      letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+    .list-count{background:var(--navy);color:#fff;border-radius:8px;padding:.08rem .38rem;font-size:.62rem;font-weight:700}
+    .rlist{flex:1;overflow-y:auto}
+    .ritem{padding:.55rem .8rem;border-bottom:1px solid var(--border);cursor:pointer;
+      transition:background .1s;border-left:3px solid transparent}
+    .ritem:hover{background:#f5f7fc}
+    .ritem.sel{background:#edf1fb;border-left-color:var(--navy)}
+    .ritem.has-new{border-left-color:var(--amber)}
+    .ritem-row{display:flex;align-items:center;gap:.35rem}
+    .rnum{font-size:.72rem;font-weight:600;color:var(--navy);font-family:monospace;flex:1;word-break:break-all}
+    .rbadge{background:var(--amber);color:#fff;border-radius:7px;font-size:.57rem;font-weight:700;padding:.08rem .36rem}
+    .ralias{font-size:.69rem;color:var(--muted);margin-top:.08rem}
+    .rfoot{display:flex;align-items:center;justify-content:space-between;margin-top:.1rem}
+    .rstatus{font-size:.63rem}
+    .rstatus.ok{color:var(--green)}.rstatus.err{color:var(--red)}.rstatus.pend{color:var(--muted)}
+    .rsrc{font-size:.58rem;color:var(--muted);background:var(--bg);border-radius:3px;padding:.05rem .25rem}
+    .empty-list{padding:1.5rem .75rem;text-align:center;color:var(--muted);font-size:.76rem}
+    .side-act{padding:.35rem .75rem .55rem;display:flex;gap:.35rem;flex-shrink:0}
+    .page-title{font-family:var(--serif);font-size:1.25rem;font-weight:600;color:var(--navy)}
+    .page-sub{font-size:.75rem;color:var(--muted);margin-top:.12rem;margin-bottom:1rem}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1.1rem}
+    .stat{background:var(--surface);border-radius:9px;border:1px solid var(--border);padding:.8rem .9rem}
+    .stat-lbl{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+    .stat-val{font-size:1.4rem;font-weight:600;font-family:var(--serif);color:var(--navy);margin:.15rem 0}
+    .stat-val.am{color:var(--amber)}.stat-val.gr{color:var(--green)}.stat-val.rd{color:var(--red)}
+    .stat-s{font-size:.65rem;color:var(--muted)}
+    .ptable{width:100%;border-collapse:collapse}
+    .ptable th{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+      color:var(--muted);padding:.45rem .8rem;border-bottom:2px solid var(--border);text-align:left;background:#f8f9fc}
+    .ptable td{font-size:.76rem;padding:.48rem .8rem;border-bottom:1px solid var(--border);vertical-align:middle}
+    .ptable tr:last-child td{border-bottom:none}
+    .ptable tbody tr:hover td{background:#f5f7fc;cursor:pointer}
+    .b-rama{background:#e8f5e9;color:#2D6A4F;font-size:.6rem;font-weight:700;padding:.1rem .38rem;border-radius:4px}
+    .b-samai{background:#e0e8f7;color:#1B2F4E;font-size:.6rem;font-weight:700;padding:.1rem .38rem;border-radius:4px}
+    .b-new{background:var(--amber);color:#fff;font-size:.57rem;font-weight:700;padding:.06rem .32rem;
+      border-radius:3px;text-transform:uppercase;margin-left:.3rem;vertical-align:middle}
+    .pcard{background:var(--surface);border-radius:10px;border:1px solid var(--border);overflow:hidden;margin-bottom:1rem}
+    .pcard-head{background:var(--navy);padding:.8rem 1rem;display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem}
+    .pcard-title{font-family:var(--serif);font-size:.92rem;color:#fff;font-weight:600}
+    .pcard-num{font-size:.67rem;color:rgba(255,255,255,.5);font-family:monospace;margin-top:.18rem}
+    .estado-pill{background:rgba(255,255,255,.15);border-radius:5px;padding:.22rem .5rem;
+      font-size:.65rem;color:rgba(255,255,255,.9);font-weight:600;flex-shrink:0}
+    .meta{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
+      gap:.45rem;padding:.8rem 1rem;border-bottom:1px solid var(--border)}
+    .mk{font-size:.59rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+    .mv{font-size:.78rem;color:var(--text);font-weight:500;margin-top:.08rem}
+    .tl{padding:1rem}
+    .tl-title{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:.9rem}
+    .act{display:flex;gap:.8rem;position:relative}
+    .act:not(:last-child)::before{content:'';position:absolute;left:4.5px;top:16px;width:1px;height:calc(100% + .45rem);background:var(--border)}
+    .act-dot{width:10px;height:10px;border-radius:50%;background:var(--border);border:2px solid #fff;flex-shrink:0;margin-top:3px;position:relative;z-index:1}
+    .act-dot.new-dot{background:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.18)}
+    .act-dot.last-dot{background:var(--green)}
+    .act-body{flex:1;padding-bottom:1rem}
+    .act-date{font-size:.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+    .act-tipo{font-size:.8rem;font-weight:600;color:var(--text);margin:.1rem 0}
+    .act-desc{font-size:.74rem;color:var(--muted);line-height:1.55}
+    .act-nota{font-size:.7rem;color:var(--navy);background:#edf1fb;border-radius:4px;padding:.28rem .5rem;margin-top:.32rem;font-style:italic}
+    .reg-panel{background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:.85rem 1rem;margin-bottom:1rem}
+    .reg-title{font-size:.72rem;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.65rem}
+    .reg-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.55rem}
+    .reg-full{grid-column:1/-1}
+    .cfg-card{background:var(--surface);border-radius:10px;border:1px solid var(--border);padding:1rem;margin-bottom:.75rem}
+    .cfg-title{font-weight:600;font-size:.84rem;color:var(--navy);margin-bottom:.8rem;display:flex;align-items:center;gap:.38rem}
+    .info-box{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:.55rem .75rem;font-size:.72rem;color:#1e40af;line-height:1.7;margin-top:.75rem}
+    .warn-box{background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:.55rem .75rem;font-size:.72rem;color:#92400e;line-height:1.7}
+    .step-box{display:flex;gap:.6rem;align-items:flex-start;background:var(--bg);border-radius:6px;padding:.5rem .7rem;margin-bottom:.38rem}
+    .step-n{width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;
+      font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .step-t{font-size:.8rem;font-weight:600;color:var(--text)}
+    .step-d{font-size:.69rem;color:var(--muted);margin-top:.08rem}
+    .toasts{position:fixed;bottom:1.1rem;right:1.1rem;display:flex;flex-direction:column;gap:.35rem;z-index:999;pointer-events:none}
+    .toast{background:var(--navy);color:#fff;border-radius:7px;padding:.55rem .8rem;
+      font-size:.74rem;max-width:300px;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:tIn .18s ease}
+    .toast.ok{background:var(--green)}.toast.err{background:var(--red)}.toast.warn{background:var(--amber)}
+    @keyframes tIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+    .spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);
+      border-top-color:#fff;border-radius:50%;animation:sp .65s linear infinite;vertical-align:middle}
+    .spin.dk{border-color:rgba(27,47,78,.15);border-top-color:var(--navy)}
+    @keyframes sp{to{transform:rotate(360deg)}}
+    .empty-st{text-align:center;padding:3rem 1.5rem}
+    .empty-ico{font-size:2.5rem;opacity:.28}
+    .empty-t{font-family:var(--serif);font-size:1rem;color:var(--navy);margin:.65rem 0 .35rem}
+    .empty-d{font-size:.77rem;color:var(--muted);line-height:1.6}
+    .hidden{display:none}
+    ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+    @media(max-width:660px){
+      .layout{flex-direction:column;height:auto}
+      .side{width:100%;height:auto;max-height:50vh}
+      .main{padding:1rem}
+      .reg-grid{grid-template-columns:1fr}
+      .stats{grid-template-columns:1fr 1fr}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="hdr-logo">⚖️</div>
+    <span class="hdr-title">Monitor <span>Judicial</span></span>
+  </div>
+  <div class="hdr-right">
+    <div id="srvDot" class="srv-dot pend"></div>
+    <span id="srvTxt" class="srv-txt">Conectando…</span>
+    <button class="btn btn-ghost btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25)" onclick="showView('dash')">Panel</button>
+    <button class="btn btn-ghost btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25)" onclick="showView('config')">⚙</button>
+    <button id="btnExcel" class="btn btn-green btn-sm hidden" onclick="exportarExcel()">↓ Excel</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- ── Sidebar ── -->
+  <aside class="side">
+    <div class="tabs">
+      <button class="tab on" onclick="setSideTab('agregar',this)">＋ Agregar</button>
+      <button class="tab" onclick="setSideTab('excel',this)">📊 Excel</button>
+    </div>
+
+    <div id="tabAgregar" class="form">
+      <div id="srvWarning" class="warn-box hidden">Configura el servidor en ⚙ primero.</div>
+      <div>
+        <label class="lbl">Número de radicado</label>
+        <input class="inp" id="fNum" placeholder="05001333300220220017200" onkeydown="if(event.key==='Enter')agregar()"/>
+        <div class="hint">23 dígitos sin espacios</div>
+      </div>
+      <div>
+        <label class="lbl">Alias del caso</label>
+        <input class="inp" id="fAlias" placeholder="Nombre corto identificador" onkeydown="if(event.key==='Enter')agregar()"/>
+      </div>
+      <div>
+        <label class="lbl">Sistema</label>
+        <select class="inp" id="fFuente" onchange="toggleGuid()">
+          <option value="rama">CPNU · Rama Judicial (automático)</option>
+          <option value="samai">SAMAI · Consejo de Estado (manual)</option>
+        </select>
+      </div>
+      <div id="guidRow" class="hidden">
+        <label class="lbl">GUID SAMAI</label>
+        <input class="inp" id="fGuid" placeholder="050013333002..."/>
+        <div class="hint">Del link: ...?guid=XXXXXXX</div>
+      </div>
+      <button class="btn btn-navy" id="btnAgregar" onclick="agregar()">Agregar proceso</button>
+    </div>
+
+    <div id="tabExcel" class="hidden">
+      <div id="dropZone" class="form" style="padding:.75rem"
+        ondragover="event.preventDefault();this.style.background='#f0f7f4';this.style.borderColor='var(--green)'"
+        ondragleave="this.style.background='';this.style.borderColor=''"
+        ondrop="onDrop(event)"
+        onclick="document.getElementById('xlInput').click()"
+        style="border:2px dashed var(--border);border-radius:8px;padding:1.1rem .6rem;margin:.75rem;text-align:center;cursor:pointer">
+        <div style="font-size:1.5rem;opacity:.45">📂</div>
+        <div style="font-size:.76rem;color:var(--muted);margin-top:.25rem">Arrastra tu Excel aquí</div>
+        <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem">o haz clic para seleccionar</div>
+      </div>
+      <input id="xlInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="importarExcel(this.files[0])"/>
+      <div style="margin:.4rem .6rem .8rem;background:#f0f7f4;border:1px solid #b7e4c7;border-radius:6px;padding:.55rem .7rem;font-size:.68rem;color:#2d6a4f;line-height:1.7">
+        <strong>Columnas:</strong><br>A: Radicado · B: Alias<br>C: Fuente (samai/vacío=rama)<br>D: GUID SAMAI
+      </div>
+    </div>
+
+    <div class="side-act hidden" id="sideAct">
+      <button class="btn btn-ghost btn-sm" style="flex:1;font-size:.68rem" onclick="actualizarTodos()">🔄 Actualizar todos</button>
+    </div>
+
+    <div class="list-hdr">
+      <span>Mis procesos</span>
+      <span class="list-count" id="listCount">0</span>
+    </div>
+    <div class="rlist" id="rlist">
+      <div class="empty-list">Sin procesos.<br>Agrega uno arriba.</div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main" id="mainContent">
+    <!-- contenido dinámico -->
+  </main>
+</div>
+
+<!-- Toasts -->
+<div class="toasts" id="toasts"></div>
+
+<script>
+// ── Estado global ──────────────────────────────────────────────────────────────
+let SERVER_URL = localStorage.getItem('mj_url') || '';
+let TOKEN      = localStorage.getItem('mj_token') || '';
+let procs      = [];
+let selId      = null;
+let srvOk      = false;
+let pollTimer  = null;
+
+// ── API ────────────────────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  if (!SERVER_URL) throw new Error('Sin servidor configurado');
+  const res = await fetch(SERVER_URL.replace(/\/$/, '') + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'X-Token': TOKEN, ...(opts.headers || {}) }
+  });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+  return res.json();
+}
+
+async function verificar() {
+  setSrvStatus('pend');
+  try {
+    await api('/api/ping');
+    setSrvStatus('ok');
+    localStorage.setItem('mj_url', SERVER_URL);
+    localStorage.setItem('mj_token', TOKEN);
+    await cargarProcs();
+    iniciarPolling();
+    toast('Servidor conectado', 'ok');
+  } catch(e) {
+    setSrvStatus('err');
+    toast('No se pudo conectar: ' + e.message, 'err');
+  }
+}
+
+function setSrvStatus(s) {
+  srvOk = s === 'ok';
+  const dot = document.getElementById('srvDot');
+  const txt = document.getElementById('srvTxt');
+  dot.className = 'srv-dot ' + s;
+  txt.textContent = s === 'ok' ? 'Conectado' : s === 'err' ? 'Sin conexión' : 'Conectando…';
+  document.getElementById('srvWarning').classList.toggle('hidden', srvOk);
+  document.getElementById('btnAgregar').disabled = !srvOk;
+}
+
+async function cargarProcs() {
+  procs = await api('/api/procesos');
+  renderLista();
+  document.getElementById('btnExcel').classList.toggle('hidden', procs.length === 0);
+  document.getElementById('sideAct').classList.toggle('hidden', procs.length === 0);
+  document.getElementById('listCount').textContent = procs.length;
+}
+
+function iniciarPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    if (!srvOk) return;
+    try {
+      const prevProcs = [...procs];
+      procs = await api('/api/procesos');
+      renderLista();
+      const notifs = await api('/api/notificaciones');
+      notifs.forEach(n => {
+        toast(`🔔 ${n.alias}: ${n.nuevas} nueva(s) actuación(es)`, 'warn');
+        if ('Notification' in window && Notification.permission === 'granted')
+          new Notification('Monitor Judicial', { body: `${n.alias}: ${n.nuevas} nueva(s)` });
+      });
+      if (selId) renderProc(procs.find(p => p.id === selId));
+    } catch {}
+  }, 30000);
+}
+
+// ── Agregar ────────────────────────────────────────────────────────────────────
+async function agregar() {
+  const num    = document.getElementById('fNum').value.trim().replace(/\s+/g,'');
+  const alias  = document.getElementById('fAlias').value.trim();
+  const fuente = document.getElementById('fFuente').value;
+  const guid   = document.getElementById('fGuid').value.trim();
+  if (!num) return;
+  const btn = document.getElementById('btnAgregar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Consultando…';
+  try {
+    const nuevo = await api('/api/procesos', {
+      method: 'POST',
+      body: JSON.stringify({ numero: num, alias: alias || num, fuente, samaiGuid: guid })
+    });
+    procs.push(nuevo);
+    renderLista();
+    document.getElementById('fNum').value = '';
+    document.getElementById('fAlias').value = '';
+    document.getElementById('fGuid').value = '';
+    document.getElementById('btnExcel').classList.remove('hidden');
+    document.getElementById('sideAct').classList.remove('hidden');
+    document.getElementById('listCount').textContent = procs.length;
+    toast('Proceso agregado' + (nuevo.status === 'ok' ? ' y consultado ✓' : ''), nuevo.status === 'ok' ? 'ok' : 'warn');
+    abrirProc(nuevo.id);
+  } catch(e) { toast(e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Agregar proceso'; }
+}
+
+// ── Consultar ──────────────────────────────────────────────────────────────────
+async function consultar(id) {
+  const p = procs.find(x => x.id === id);
+  if (!p) return;
+  const btn = document.getElementById('btnConsultar_' + id);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>'; }
+  try {
+    const updated = await api('/api/procesos/' + id + '/consultar', { method: 'POST' });
+    const idx = procs.findIndex(x => x.id === id);
+    if (idx >= 0) procs[idx] = updated;
+    renderLista();
+    if (selId === id) renderProc(updated);
+    if (updated.newCount > 0) toast(updated.newCount + ' nueva(s) actuación(es)', 'warn');
+    else toast('Sin cambios nuevos', 'ok');
+  } catch(e) { toast(e.message, 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '↻'; } }
+}
+
+async function actualizarTodos() {
+  toast('Actualizando todos los procesos…');
+  for (const p of procs.filter(x => x.fuente === 'rama')) await consultar(p.id);
+  toast('Actualización completada', 'ok');
+}
+
+async function eliminar(id) {
+  if (!confirm('¿Eliminar este proceso?')) return;
+  try {
+    await api('/api/procesos/' + id, { method: 'DELETE' });
+    procs = procs.filter(x => x.id !== id);
+    renderLista();
+    document.getElementById('listCount').textContent = procs.length;
+    if (selId === id) { selId = null; showView('dash'); }
+    toast('Proceso eliminado', 'ok');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function agregarActuacion(id) {
+  const fecha = document.getElementById('rFecha').value;
+  const tipo  = document.getElementById('rTipo').value.trim();
+  const desc  = document.getElementById('rDesc').value.trim();
+  const nota  = document.getElementById('rNota').value.trim();
+  if (!tipo || !desc) return;
+  try {
+    await api('/api/procesos/' + id + '/actuacion', {
+      method: 'POST',
+      body: JSON.stringify({ fecha, tipo, descripcion: desc, anotacion: nota || null })
+    });
+    await cargarProcs();
+    const p = procs.find(x => x.id === id);
+    if (p) renderProc(p);
+    document.getElementById('regPanel').classList.add('hidden');
+    toast('Actuación registrada', 'ok');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ── Render lista ───────────────────────────────────────────────────────────────
+function renderLista() {
+  const el = document.getElementById('rlist');
+  if (procs.length === 0) { el.innerHTML = '<div class="empty-list">Sin procesos.<br>Agrega uno arriba.</div>'; return; }
+  el.innerHTML = procs.map(p => `
+    <div class="ritem${selId===p.id?' sel':''}${p.newCount>0?' has-new':''}" onclick="abrirProc('${p.id}')">
+      <div class="ritem-row">
+        <span class="rnum">${p.numero}</span>
+        ${p.newCount>0?`<span class="rbadge">${p.newCount}</span>`:''}
+        <button class="btn-del" onclick="event.stopPropagation();eliminar('${p.id}')">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="ralias">${p.alias!==p.numero?p.alias:(p.demandante||'—')}</div>
+      <div class="rfoot">
+        <span class="rstatus ${p.status==='ok'?'ok':p.status==='error'?'err':'pend'}">
+          ${p.status==='error'?'⚠ Error':p.estado||(p.status==='ok'?'Consultado':'Pendiente')}
+        </span>
+        <span class="rsrc">${p.fuente==='samai'?'SAMAI':'Rama'}</span>
+      </div>
+    </div>`).join('');
+}
+
+function abrirProc(id) {
+  selId = id;
+  api('/api/procesos/' + id + '/visto', { method: 'POST' }).catch(()=>{});
+  const p = procs.find(x => x.id === id);
+  if (p) { p.newCount = 0; renderLista(); renderProc(p); }
+  showView('proc');
+}
+
+// ── Render proceso ─────────────────────────────────────────────────────────────
+function renderProc(p) {
+  if (!p) return;
+  const fd = f => { if(!f) return '—'; const d=new Date(f); return isNaN(d)?f:d.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}); };
+  const acts = p.actuaciones || [];
+  const main = document.getElementById('mainContent');
+  main.innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1.1rem">
+      <div>
+        <div class="page-title">${p.alias!==p.numero?p.alias:(p.demandante||p.numero)}</div>
+        <div class="page-sub" style="display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;margin-top:.2rem">
+          <span class="${p.fuente==='samai'?'b-samai':'b-rama'}">${p.fuente==='samai'?'SAMAI · Consejo de Estado':'CPNU · Rama Judicial'}</span>
+          ${p.lastCheck?`<span>Última consulta: ${fd(p.lastCheck)}</span>`:''}
+        </div>
+      </div>
+      <div style="display:flex;gap:.35rem;flex-wrap:wrap">
+        ${p.fuente==='rama'?`<button class="btn btn-green btn-sm" id="btnConsultar_${p.id}" onclick="consultar('${p.id}')">↻ Actualizar</button>`:''}
+        ${p.fuente==='samai'?`<a class="btn btn-amber btn-sm" href="https://samai.consejodeestado.gov.co/Vistas/Casos/list_procesos.aspx?guid=${p.samaiGuid}" target="_blank">🔗 Abrir SAMAI</a>`:''}
+        <button class="btn btn-navy btn-sm" onclick="toggleReg()">+ Actuación</button>
+      </div>
+    </div>
+
+    <div id="regPanel" class="reg-panel hidden">
+      <div class="reg-title">✍️ Registrar actuación</div>
+      <div class="reg-grid">
+        <div><label class="lbl">Fecha</label><input class="inp" type="date" id="rFecha" value="${new Date().toISOString().slice(0,10)}"/></div>
+        <div><label class="lbl">Tipo</label><input class="inp" id="rTipo" placeholder="Auto, Fallo, Traslado…"/></div>
+        <div class="reg-full"><label class="lbl">Descripción</label><textarea class="inp" id="rDesc" rows="2" style="resize:vertical"></textarea></div>
+        <div class="reg-full"><label class="lbl">Anotación (opcional)</label><input class="inp" id="rNota"/></div>
+      </div>
+      <div style="display:flex;gap:.4rem">
+        <button class="btn btn-navy btn-sm" onclick="agregarActuacion('${p.id}')">Guardar</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleReg()">Cancelar</button>
+      </div>
+    </div>
+
+    <div class="pcard">
+      <div class="pcard-head">
+        <div>
+          <div class="pcard-title">${p.demandante||'—'} <span style="font-weight:300;opacity:.6">vs</span> ${p.demandado||'—'}</div>
+          <div class="pcard-num">${p.numero}</div>
+        </div>
+        ${p.estado?`<div class="estado-pill">${p.estado}</div>`:''}
+      </div>
+      <div class="meta">
+        ${[['Tipo',p.tipo],['Clase',p.clase],['Despacho',p.despacho],['Ponente',p.ponente],['Fecha radicación',fd(p.fechaRadicacion)],['Última actuación',fd(p.ultimaActuacion)]].map(([k,v])=>`<div><div class="mk">${k}</div><div class="mv">${v||'—'}</div></div>`).join('')}
+      </div>
+      <div class="tl">
+        <div class="tl-title">Actuaciones (${acts.length})</div>
+        ${acts.length===0
+          ?'<div style="text-align:center;padding:1.5rem;color:var(--muted);font-size:.77rem">Sin actuaciones registradas.</div>'
+          :acts.map((a,i)=>`
+          <div class="act">
+            <div class="act-dot ${i===0?'new-dot':i===acts.length-1?'last-dot':''}"></div>
+            <div class="act-body">
+              <div class="act-date">${fd(a.fecha)}</div>
+              <div class="act-tipo">${a.tipo}${i===0?'<span class="b-new">más reciente</span>':''}</div>
+              <div class="act-desc">${a.descripcion}</div>
+              ${a.anotacion?`<div class="act-nota">${a.anotacion}</div>`:''}
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-xs" style="color:var(--red);border-color:var(--red)" onclick="eliminar('${p.id}')">🗑 Eliminar proceso</button>
+  `;
+}
+
+function toggleReg() {
+  document.getElementById('regPanel').classList.toggle('hidden');
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────────────────
+function renderDash() {
+  const total = procs.length;
+  const nuevas = procs.filter(p=>p.newCount>0).length;
+  const ok = procs.filter(p=>p.status==='ok').length;
+  const err = procs.filter(p=>p.status==='error').length;
+  const fd = f => { if(!f) return '—'; const d=new Date(f); return isNaN(d)?f:d.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}); };
+
+  if (!srvOk) {
+    document.getElementById('mainContent').innerHTML = `
+      <div class="empty-st">
+        <div class="empty-ico">🔌</div>
+        <div class="empty-t">Servidor no conectado</div>
+        <div class="empty-d" style="margin-bottom:1rem">Configura la URL de tu servidor Railway<br>para empezar a monitorear procesos.</div>
+        <button class="btn btn-navy" onclick="showView('config')">⚙ Configurar servidor</button>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-title">Panel de seguimiento</div>
+    <div class="page-sub">Consulta automática · CPNU Rama Judicial | SAMAI Consejo de Estado</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-lbl">Total</div><div class="stat-val">${total}</div><div class="stat-s">procesos</div></div>
+      <div class="stat"><div class="stat-lbl">Novedades</div><div class="stat-val ${nuevas>0?'am':''}">${nuevas}</div><div class="stat-s">por revisar</div></div>
+      <div class="stat"><div class="stat-lbl">Actualizados</div><div class="stat-val ${ok>0?'gr':''}">${ok}</div><div class="stat-s">OK</div></div>
+      <div class="stat"><div class="stat-lbl">Errores</div><div class="stat-val ${err>0?'rd':''}">${err}</div><div class="stat-s">reintentar</div></div>
+    </div>
+    ${total===0?`
+      <div class="empty-st">
+        <div class="empty-ico">⚖️</div>
+        <div class="empty-t">Sin procesos aún</div>
+        <div class="empty-d">Agrega radicados en el panel izquierdo.<br>El servidor los consultará automáticamente cada hora.</div>
+      </div>`:`
+      <div class="pcard">
+        <div style="padding:.6rem .9rem;border-bottom:1px solid var(--border);background:#f8f9fc">
+          <span style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)">Todos los procesos</span>
+        </div>
+        <table class="ptable">
+          <thead><tr><th>Radicado</th><th>Caso</th><th>Sistema</th><th>Estado</th><th>Acts.</th><th>Novedad</th><th></th></tr></thead>
+          <tbody>
+            ${procs.map(p=>`
+            <tr onclick="abrirProc('${p.id}')">
+              <td><span style="font-family:monospace;font-size:.7rem;font-weight:600">${p.numero}</span></td>
+              <td>
+                <div style="font-weight:500">${p.alias!==p.numero?p.alias:(p.demandante||'—')}</div>
+                ${p.demandado?`<div style="font-size:.67rem;color:var(--muted)">vs ${p.demandado}</div>`:''}
+              </td>
+              <td><span class="${p.fuente==='samai'?'b-samai':'b-rama'}">${p.fuente==='samai'?'SAMAI':'Rama'}</span></td>
+              <td><span style="font-size:.74rem;color:${p.status==='error'?'var(--red)':p.status==='ok'?'var(--text)':'var(--muted)'}">${p.estado||(p.status==='error'?'Error':'—')}</span></td>
+              <td><strong>${p.actuaciones?.length||0}</strong></td>
+              <td>${p.newCount>0?`<span class="b-new">${p.newCount} nuevo${p.newCount>1?'s':''}</span>`:''}</td>
+              <td>${p.fuente==='rama'?`<button class="btn btn-ghost btn-xs" id="btnConsultar_${p.id}" onclick="event.stopPropagation();consultar('${p.id}')">↻</button>`:''}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`}`;
+}
+
+// ── Config ─────────────────────────────────────────────────────────────────────
+function renderConfig() {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-title" style="margin-bottom:.2rem">Configuración</div>
+    <div class="page-sub">Conexión al servidor Railway</div>
+
+    <div class="cfg-card">
+      <div class="cfg-title">🔌 Servidor Railway
+        <span id="cfgStatus" style="margin-left:auto;font-size:.6rem;font-weight:700;padding:.12rem .4rem;border-radius:7px;background:${srvOk?'var(--green)':'var(--red)'};color:#fff">${srvOk?'✓ Conectado':'✗ Sin conexión'}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.45rem;margin-bottom:.65rem">
+        <div>
+          <label class="lbl">URL del servidor</label>
+          <input class="inp" id="cfgUrl" placeholder="https://tu-app.up.railway.app" value="${SERVER_URL}"/>
+          <div class="hint">La URL que Railway te asignó</div>
+        </div>
+        <div>
+          <label class="lbl">Token de acceso</label>
+          <input class="inp" type="password" id="cfgToken" placeholder="judicial2024" value="${TOKEN}"/>
+          <div class="hint">El valor de ADMIN_TOKEN en Railway</div>
+        </div>
+      </div>
+      <button class="btn btn-navy btn-sm" onclick="conectar()">Conectar</button>
+      ${srvOk?`<div class="info-box">Servidor activo · ${procs.length} proceso(s) en seguimiento · Consulta cada ${localStorage.getItem('mj_intervalo')||60} min</div>`:''}
+    </div>
+
+    <div class="cfg-card">
+      <div class="cfg-title">ℹ️ Cómo funciona</div>
+      <div style="font-size:.76rem;color:var(--muted);line-height:1.8">
+        El servidor en Railway consulta la Rama Judicial cada hora automáticamente, aunque tu Mac esté apagada.<br><br>
+        <strong style="color:var(--text)">Rama Judicial (CPNU):</strong> consulta 100% automática.<br>
+        <strong style="color:var(--text)">SAMAI · Consejo de Estado:</strong> abre el expediente con el botón 🔗 y registra las actuaciones manualmente con "+ Actuación".
+      </div>
+    </div>`;
+}
+
+function conectar() {
+  SERVER_URL = document.getElementById('cfgUrl').value.trim();
+  TOKEN      = document.getElementById('cfgToken').value.trim();
+  verificar();
+}
+
+// ── Vistas ─────────────────────────────────────────────────────────────────────
+function showView(v) {
+  if (v === 'dash')   renderDash();
+  if (v === 'config') renderConfig();
+  if (v === 'proc' && selId) renderProc(procs.find(p=>p.id===selId));
+}
+
+// ── Tabs sidebar ───────────────────────────────────────────────────────────────
+function setSideTab(tab, btn) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('tabAgregar').classList.toggle('hidden', tab!=='agregar');
+  document.getElementById('tabExcel').classList.toggle('hidden', tab!=='excel');
+}
+
+function toggleGuid() {
+  document.getElementById('guidRow').classList.toggle('hidden', document.getElementById('fFuente').value!=='samai');
+}
+
+// ── Excel ──────────────────────────────────────────────────────────────────────
+function onDrop(e) {
+  e.preventDefault();
+  e.currentTarget.style.background='';
+  e.currentTarget.style.borderColor='';
+  if(e.dataTransfer.files[0]) importarExcel(e.dataTransfer.files[0]);
+}
+
+async function importarExcel(file) {
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  document.head.appendChild(script);
+  await new Promise(r => script.onload = r);
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const wb   = XLSX.read(e.target.result, { type: 'binary' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+    let added = 0;
+    for (const [i, row] of rows.entries()) {
+      if (i===0 && typeof row[0]==='string' && /radicado|número/i.test(row[0])) continue;
+      const num = String(row[0]||'').trim().replace(/\s+/g,'');
+      if (!num||num.length<5) continue;
+      if (procs.find(p=>p.numero===num)) continue;
+      try {
+        const fuente = String(row[2]||'').toLowerCase().includes('samai')?'samai':'rama';
+        const nuevo  = await api('/api/procesos', {method:'POST', body:JSON.stringify({numero:num,alias:String(row[1]||'').trim()||num,fuente,samaiGuid:String(row[3]||'').trim()})});
+        procs.push(nuevo); added++;
+      } catch {}
+    }
+    renderLista();
+    document.getElementById('listCount').textContent = procs.length;
+    toast(added + ' proceso(s) importado(s)', 'ok');
+  };
+  reader.readAsBinaryString(file);
+}
+
+function exportarExcel() {
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  document.head.appendChild(script);
+  script.onload = () => {
+    const rows = [['Radicado','Alias','Fuente','Demandante','Demandado','Estado','Actuaciones','Última revisión']];
+    procs.forEach(p=>rows.push([p.numero,p.alias,p.fuente,p.demandante||'',p.demandado||'',p.estado||'',p.actuaciones?.length||0,p.lastCheck?new Date(p.lastCheck).toLocaleDateString('es-CO'):'']));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Procesos');
+    XLSX.writeFile(wb,`monitor_judicial_${new Date().toISOString().slice(0,10)}.xlsx`);
+    toast('Excel exportado','ok');
+  };
+}
+
+// ── Toasts ─────────────────────────────────────────────────────────────────────
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type==='ok'?'ok':type==='err'?'err':type==='warn'?'warn':'');
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  renderDash();
+  if (SERVER_URL && TOKEN) verificar();
+  else { setSrvStatus('err'); showView('config'); }
+});
+</script>
+</body>
+</html>
