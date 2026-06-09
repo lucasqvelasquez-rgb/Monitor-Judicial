@@ -46,22 +46,53 @@ db = leer_db()
 notifs_pendientes = []
 
 # ── Consulta API Rama Judicial ─────────────────────────────────────────────────
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "es-CO,es;q=0.9",
-    "Referer": "https://consultaprocesos.ramajudicial.gov.co/",
-    "Origin": "https://consultaprocesos.ramajudicial.gov.co",
-}
+HEADERS_LIST = [
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "es-CO,es;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Referer": "https://consultaprocesos.ramajudicial.gov.co/Procesos/NumeroRadicacion",
+        "Origin": "https://consultaprocesos.ramajudicial.gov.co",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+    },
+    {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        "Accept": "application/json, */*",
+        "Accept-Language": "es-419,es;q=0.9",
+        "Referer": "https://consultaprocesos.ramajudicial.gov.co/Procesos/NumeroRadicacion",
+        "Origin": "https://consultaprocesos.ramajudicial.gov.co",
+    },
+]
+
+def get_json(url, intentos=3):
+    """Intenta obtener JSON con reintentos y rotación de headers."""
+    ultimo_error = None
+    for i in range(intentos):
+        try:
+            headers = HEADERS_LIST[i % len(HEADERS_LIST)]
+            time.sleep(i * 1.5)  # espera progresiva entre reintentos
+            r = requests.get(url, headers=headers, timeout=25)
+            if r.status_code == 200 and r.text.strip():
+                return r.json()
+            elif r.status_code == 429:
+                time.sleep(5)
+                continue
+            else:
+                ultimo_error = f"HTTP {r.status_code}: {r.text[:200]}"
+        except Exception as e:
+            ultimo_error = str(e)
+    raise ValueError(f"No se pudo consultar después de {intentos} intentos: {ultimo_error}")
 
 def consultar_rama_judicial(radicado: str) -> dict:
     base = "https://consultaprocesos.ramajudicial.gov.co/api/v2"
 
     # Paso 1: buscar proceso por radicado
     url = f"{base}/Procesos/NumeroRadicacion/{radicado}/pagina/1"
-    r = requests.get(url, headers=HEADERS, timeout=20)
-    r.raise_for_status()
-    data = r.json()
+    data = get_json(url)
 
     procesos = data.get("procesos", [])
     if not procesos:
@@ -72,9 +103,7 @@ def consultar_rama_judicial(radicado: str) -> dict:
 
     # Paso 2: obtener actuaciones
     url_acts = f"{base}/Proceso/{id_proceso}/actuaciones/pagina/1"
-    r2 = requests.get(url_acts, headers=HEADERS, timeout=20)
-    r2.raise_for_status()
-    data_acts = r2.json()
+    data_acts = get_json(url_acts)
 
     actuaciones = []
     for a in data_acts.get("actuaciones", []):
